@@ -1,137 +1,88 @@
 import assert from 'assert';
 import {parseCode,navigate,createTable} from '../src/js/code-analyzer';
 
-describe('The javascript parser', () => {
-    it('is parsing an empty function correctly', () => {
-        assert.equal(
-            JSON.stringify(parseCode(''),{loc:true}),
-            '{"type":"Program","body":[],"sourceType":"script","loc":{"start":{"line":0,"column":0},"end":{"line":0,"column":0}}}'
-        );
-    });
 
-    it('is parsing a simple variable declaration correctly', () => {
-        assert.equal(
-            JSON.stringify(parseCode('let a = 1;'),{loc:true}),'{"type":"Program","body":[{"type":"VariableDeclaration","declarations":[{"type":"VariableDeclarator","id":{"type":"Identifier","name":"a","loc":{"start":{"line' +
-            '":1,"column":4},"end":{"line":1,"column":5}}},"init":{"type":"Literal","value":1,"raw":"1","loc":{"start":{"line":1,"column":8},"end":{"line":1,"column":9}}},"loc":{"start' +
-            '":{"line":1,"column":4},"end":{"line":1,"column":9}}}],"kind":"let","loc":{"start":{"line":1,"column":0},"end":{"line":1,"column":10}}}],"sourceType":"script","loc":{"start' +
-            '":{"line":1,"column":0},"end":{"line":1,"column":10}}}');
+describe('simple functions',() => {
+    it('check simple function' , () => {
+        let arrayOfCode = [];
+        navigate(parseCode('function foo(x,y,z) { x=y; }').body , 'function foo(x,y,z) { x=y; }' , arrayOfCode , [] , false,[{name: 'x' , value: 1},{name: 'y' , value: 2},{name: 'z' , value: 3}],[],[]);
+        assert.equal(JSON.stringify(arrayOfCode),'["function foo(x,y,z) {","x = y;","}"]'); });
+    it('add simple locals' , () => {
+        let arrayOfCode = [];
+        navigate(parseCode('function foo(x,y,z) { let a = 1; x = a; }').body , 'function foo(x,y,z) { let a = 1; x = a; }' , arrayOfCode , [] , false,[{name: 'x' , value: 1},{name: 'y' , value: 2},{name: 'z' , value: 3}],[],[]);
+        assert.equal(JSON.stringify(arrayOfCode),'["function foo(x,y,z) {","x = 1;","}"]'); });
+    it('add complex locals' , () => {
+        let arrayOfCode = [];
+        navigate(parseCode('function foo(x,y,z) { let a = [1,2]; x = a[0]; return a[0];}').body , 'function foo(x,y,z) { let a = [1,2]; x = a[0]; return a[0];}' , arrayOfCode , [] , false,[{name: 'x' , value: 1},{name: 'y' , value: 2},{name: 'z' , value: 3}],[],[]);
+        assert.equal(JSON.stringify(arrayOfCode),'["function foo(x,y,z) {","x = 1;","return 1;","}"]');
+    });
+    it('add complex locals with complex values' , () => {
+        let arrayOfCode = [];
+        navigate(parseCode('function foo(x,y,z) { let a = [\'Abc\',true]; x = a[0]; }').body , 'function foo(x,y,z) { let a = [\'Abc\',true]; x = a[0]; }' , arrayOfCode , [] , false,[{name: 'x' , value: 1},{name: 'y' , value: 2},{name: 'z' , value: 3}],[],[]);
+        assert.equal(JSON.stringify(arrayOfCode),'["function foo(x,y,z) {","x = \'Abc\';","}"]');
     });
 });
 
-describe('tests without functions',() => {
-    it('check let' , () => {
-        let array = [];
-        navigate(parseCode('let a=1',{loc:true}).body , 'let a=1' , array , false);
-        assert.equal(JSON.stringify(array),'[{"line":1,"type":"VariableDeclaration","name":"a","condition":"","value":1}]');
+describe(' more tests with functions', () => {
+    it('check function with changing local', () => {
+        let arrayOfCode = [];
+        navigate(parseCode('function foo() { let a = 1; a=2; return a; }').body , 'function foo() { let a = 1; a=2; return a; }' , arrayOfCode , [] , false,[],[],[]);
+        assert.equal(JSON.stringify(arrayOfCode),'["function foo() {","return 2;","}"]'); });
+    it('check function with globals', () => {
+        let arrayOfCode = [];
+        navigate(parseCode('let d=0; function foo(x,y,z) { let a = [\'abc\',true]; if(a[1]==true) x = a[d]; if(a[0]==\'abc\') x=a[d];}').body[1] , 'let d=0; function foo(x,y,z) { let a = [\'abc\',true]; if(a[1]==true) x = a[d]; if(a[0]==\'abc\') x=a[d];}' , arrayOfCode , [] , false,[{name: 'x' , value: 1},{name: 'y' , value: 2},{name: 'z' , value: 3}],[{name: 'd' , value: 0}],[]);
+        assert.equal(JSON.stringify(arrayOfCode),'["function foo(x,y,z) {","if(a[1] == true) {","x = \'abc\';","}","if(a[0] == abc) {","x = \'abc\';","}","}"]'); });
+    it('check function with complex globals', () => {
+        let arrayOfCode = [];
+        navigate(parseCode('let d=[1,2]; let h=1; function foo(x,y,z) { let a = 0; x = d[a]; return d[0];}').body[2] , 'let d=[1,2]; let h=1; function foo(x,y,z) { let a = 0; x = d[a]; return d[0];}' , arrayOfCode , [] , false,[{name: 'x' , value: 1},{name: 'y' , value: 2},{name: 'z' , value: 3}],[{name: 'd' , value: '[1,2]'},{name:'h',value:1}],[]);
+        assert.equal(JSON.stringify(arrayOfCode),'["function foo(x,y,z) {","x = d[0];","return d[0];","}"]');
     });
-
-    it('add simple assignment' , () => {
-        let array = [];
-        navigate(parseCode('let a=1; a=2;',{loc:true}).body , 'let a=1; a=2;' , array , false);
-        assert.equal(JSON.stringify(array),'[{"line":1,"type":"VariableDeclaration","name":"a","condition":"","value":1},{"line":1,"type":"AssignmentExpression","name":"a","condition":"","value":2}]');
-    });
-    it('add complex assignment' , () => {
-        let array = [];
-        navigate(parseCode('let array; let a=1; a=array[a]; a=1+array[a];',{loc:true}).body , 'let array; let a=1; a=array[a]; a=1+array[a];' , array , false);
-        assert.equal(JSON.stringify(array),'[{"line":1,"type":"VariableDeclaration","name":"array","condition":"","value":""},{"line":1,"type":"VariableDeclaration","name":"a","condition":"","value":1},{"line":1,"type":"AssignmentExpression","name":"a","condition":"","value":"array[a]"},{"line":1,"type":"AssignmentExpression","name":"a","condition":"","value":"1 + array[a]"}]');
-    });
-});
-
-describe('tests with functions', () => {
-    it('check function with params', () => {
-        let array = [];
-        navigate(parseCode('function test (a,b) {}', {loc: true}).body, 'function test (a,b) {}', array, false);
-        assert.equal(JSON.stringify(array), '[{"line":1,"type":"FunctionDeclaration","name":"test","condition":"","value":""},{"line":1,"type":"VariableDeclaration","name":"a","condition":"","value":""},{"line":1,"type":"VariableDeclaration","name":"b","condition":"","value":""}]');
-    });
-    it('check function without params', () => {
-        let array = [];
-        navigate(parseCode('function test () {}', {loc: true}).body, 'function test () {}', array, false);
-        assert.equal(JSON.stringify(array), '[{"line":1,"type":"FunctionDeclaration","name":"test","condition":"","value":""}]');
+    it('check function with changing globals', () => {
+        let arrayOfCode = [];
+        navigate(parseCode('let d=1; function foo(x) {let u=[1]; if(d==1) {d=3; return d;} d=x[0]; d=u[0]; return d; }').body[1] , 'let d=1; function foo(x) {if(d==1) {d=3; return d;} d=x[0]; return d; }' , arrayOfCode , [] , false,[{name: 'x' , value: '[1]'}],[{name: 'd' , value: 1}],[]);
+        assert.equal(JSON.stringify(arrayOfCode),'["function foo(x) {","if(d == 1) {","d = 3;","return d;","}","d = x[0];","d = u[0];","return d;","}"]');
     });
 });
 
 
 describe('more tests with functions', () => {
-    it('test class example', () => {
-        let array = [];
-        navigate(parseCode('function binarySearch(X, V, n){let low, high, mid; low = 0; high = n - 1; while (low <= high) {mid = (low + high)/2; if (X < V[mid]) high = mid - 1; else if (X > V[mid]) low = mid + 1; else return mid; } return -1; }', {loc: true}).body, 'function binarySearch(X, V, n){let low, high, mid; low = 0; high = n - 1; while (low <= high) {mid = (low + high)/2; if (X < V[mid]) high = mid - 1; else if (X > V[mid]) low = mid + 1; else return mid; } return -1; }', array, false);
-        assert.equal(JSON.stringify(array), '[{"line":1,"type":"FunctionDeclaration","name":"binarySearch","condition":"","value":""},{"line":1,"type":"VariableDeclaration","name":"X","condition":"","va' +
-            'lue":""},{"line":1,"type":"VariableDeclaration","name":"V","condition":"","value":""},{"line":1,"type":"VariableDeclaration","name":"n","condition":"","value":""},{"line' +
-            '":1,"type":"VariableDeclaration","name":"low","condition":"","value":""},{"line":1,"type":"VariableDeclaration","name":"high","condition":"","value":""},{"line":1,"type":' +
-            '"VariableDeclaration","name":"mid","condition":"","value":""},{"line":1,"type":"AssignmentExpression","name":"low","condition":"","value":0},{"line":1,"type":"AssignmentExpre' +
-            'ssion","name":"high","condition":"","value":"n - 1"},{"line":1,"type":"WhileStatement","name":"","condition":"low <= high","value":""},{"line":1,"type":"AssignmentExpression' +
-            '","name":"mid","condition":"","value":"low + high / 2"},{"line":1,"type":"IfStatement","name":"","condition":"X < V[mid]","value":""},{"line":1,"type":"AssignmentExpression' +
-            '","name":"high","condition":"","value":"mid - 1"},{"line":1,"type":"ElseIfStatement","name":"","condition":"X > V[mid]","value":""},{"line":1,"type":"AssignmentExpression",' +
-            '"name":"low","condition":"","value":"mid + 1"},{"line":1,"type":"ReturnStatement","name":"","condition":"","value":"mid"},{"line":1,"type":"ReturnStatement","name":"","c' +
-            'ondition":""}]');
+    it('test class example sadna1', () => {
+        let arrayOfCode = [];
+        navigate(parseCode('function binarySearch(X, V, n){let low, high, mid; low = 0; high = n - 1; while (low <= high) {mid = (low + high)/2; if (X < V[mid]) high = mid - 1; else if (X > V[mid]) low = mid + 1; else return mid; } return \'not found\'; }').body , 'function binarySearch(X, V, n){let low, high, mid; low = 0; high = n - 1; while (low <= high) {mid = (low + high)/2; if (X < V[mid]) high = mid - 1; else if (X > V[mid]) low = mid + 1; else return mid; } return \'not found\'; }' , arrayOfCode , [] , false,[{name: 'X' , value: 1},{name: 'V' , value: '[1,2]'},{name: 'n' , value: 2}],[],[]);
+        assert.equal(JSON.stringify(arrayOfCode),'["function binarySearch(X,V,n) {","while(0 <= n - 1) {","if(X < V[0 + n - 1 / 2]) {","}","else if(X > V[0 + n - 1 / 2]) {","}","else {","return 0 + n - 1 / 2;","}","}","return not found;","}"]');
     });
-});
-
-describe('test complex expressions', () => {
-    it('add if expression', () => {
-        let array = [];
-        navigate(parseCode('function test (a,b) {if(a>b) { return a; } else { return b; }}', {loc: true}).body, 'function test (a,b) {if(a>b) { return a; } else { return b; }}', array, false);
-        assert.equal(JSON.stringify(array), '[{"line":1,"type":"FunctionDeclaration","name":"test","condition":"","value":""},{"line":1,"type":"VariableDeclaration","name":"a","condition":"","value":"' +
-            '"},{"line":1,"type":"VariableDeclaration","name":"b","condition":"","value":""},{"line":1,"type":"IfStatement","name":"","condition":"a > b","value":""},{"line":1,"type' +
-            '":"ReturnStatement","name":"","condition":"","value":"a"},{"line":1,"type":"ReturnStatement","name":"","condition":"","value":"b"}]');
+    it('test class example 1', () => {
+        let arrayOfCode = [];
+        navigate(parseCode('function foo(x, y, z){ let a = x + 1; let b = a + y; let c = 0; if (b < z) { c = c + 5; return x + y + z + c; } else if (b < z * 2) { c = c + x + 5; return x + y + z + c; } else { c = c + z + 5; return x + y + z + c; } }').body , 'function foo(x, y, z){ let a = x + 1; let b = a + y; let c = 0; if (b < z) { c = c + 5; return x + y + z + c; } else if (b < z * 2) { c = c + x + 5; return x + y + z + c; } else { c = c + z + 5; return x + y + z + c; } }' , arrayOfCode , [] , false,[{name: 'x' , value: 1},{name: 'y' , value: 2},{name: 'z' , value: 3}],[],[]);
+        assert.equal(JSON.stringify(arrayOfCode),'["function foo(x,y,z) {","if(x + 1 + y < z) {","return x + y + z + 0 + 5;","}","else if(x + 1 + y < z * 2) {","return x + y + z + 0 + x + 5;","}","else {","return x + y + z + 0 + z + 5;","}","}"]');
     });
-    it('add while expression', () => {
-        let array = [];
-        navigate(parseCode('function test (a,b) {let count = 0; while(a>b) { count=count+1; a=a-1; } return count;}', {loc: true}).body, 'function test (a,b) {let count = 0; while(a>b) { count=count+1; a=a-1; } return count;}', array, false);
-        assert.equal(JSON.stringify(array), '[{"line":1,"type":"FunctionDeclaration","name":"test","condition":"","value":""},{"line":1,"type":"VariableDeclaration","name":"a","condition":"","value":""},{"line":1,"type":"VariableDeclaration","name":"b","condition":"","value":""},{"line":1,"type":"VariableDeclaration","name":"count","condition":"","value":0},{"line":1,"type":"WhileStatement","name":"","condition":"a > b","value":""},{"line":1,"type":"AssignmentExpression","name":"count","condition":"","value":"count + 1"},{"line":1,"type":"AssignmentExpression","name":"a","condition":"","value":"a - 1"},{"line":1,"type":"ReturnStatement","name":"","condition":"","value":"count"}]');
-    });
-    it('add for expression', () => {
-        let array = [];
-        navigate(parseCode('function test (a,b) {let count = 0; for(;a>b;a=a-1) { count=count+1; } return count;}', {loc: true}).body, 'function test (a,b) {let count = 0; for(;a>b;a=a-1) { count=count+1; } return count;}', array, false);
-        assert.equal(JSON.stringify(array), '[{"line":1,"type":"FunctionDeclaration","name":"test","condition":"","value":""},{"line":1,"type":"VariableDeclaration","name":"a","condition":"","value":""},{"line":1,"type":"VariableDeclaration","name":"b","condition":"","value":""},{"line":1,"type":"VariableDeclaration","name":"count","condition":"","value":0},{"line":1,"type":"ForStatement","name":"","condition":"a > b","value":""},{"line":1,"type":"AssignmentExpression","name":"count","condition":"","value":"count + 1"},{"line":1,"type":"ReturnStatement","name":"","condition":"","value":"count"}]');
+    it('test class example 2', () => {
+        let arrayOfCode = [];
+        navigate(parseCode('function foo(x, y, z){ let a = x + 1; let b = a + y; let c = 0; while (a < z) { c = a + b; z = c * 2; } return z; }').body , 'function foo(x, y, z){ let a = x + 1; let b = a + y; let c = 0; while (a < z) { c = a + b; z = c * 2; } return z; }' , arrayOfCode , [] , false,[{name: 'x' , value: 1},{name: 'y' , value: 2},{name: 'z' , value: 3}],[],[]);
+        assert.equal(JSON.stringify(arrayOfCode),'["function foo(x,y,z) {","while(x + 1 < z) {","z = x + 1 + x + 1 + y * 2;","}","return z;","}"]');
     });
 });
 
 describe('test for table creation', () => {
     it('test table creator',  () => {
-        let array = [];
-        navigate(parseCode('let a=1;', {loc: true}).body, 'let a=1;', array, false);
-        assert.equal(createTable(array),'<html><body><table border="2"><tbody><tr><td>Line</td><td>Type</td><td>Name</td><td>Condition</td><td>Value</td></tr><tr><td>1</td><td>VariableDeclaration</td><td>a</td><td></td><td>1</td></tr></tbody> </table></body></html>');
+        let arrayOfCode = [];
+        let colors = [];
+        navigate(parseCode('function foo(x, y, z){ let a = x + 1; let b = a + y; let c = 0; if (b < z) { c = c + 5; return x + y + z + c; } else if (b < z * 2) { c = c + x + 5; return x + y + z + c; } else { c = c + z + 5; return x + y + z + c; } }').body , 'function foo(x, y, z){ let a = x + 1; let b = a + y; let c = 0; if (b < z) { c = c + 5; return x + y + z + c; } else if (b < z * 2) { c = c + x + 5; return x + y + z + c; } else { c = c + z + 5; return x + y + z + c; } }' , arrayOfCode , [] , false,[{name: 'x' , value: 1},{name: 'y' , value: 2},{name: 'z' , value: 3}],[],colors);
+        assert.equal(createTable(arrayOfCode,colors),'<html><body><table border="1"><tbody><tr><td>function foo(x,y,z) {</td></tr><tr><td bgcolor="OrangeRed">if(x + 1 + y < z) {</td></tr><tr><td>return x + y + z + 0 + 5;</td></tr><tr><td>}</td></tr><tr><td bgcolor="LawnGreen">else if(x + 1 + y < z * 2) {</td></tr><tr><td>return x + y + z + 0 + x + 5;</td></tr><tr><td>}</td></tr><tr><td>else {</td></tr><tr><td>return x + y + z + 0 + z + 5;</td></tr><tr><td>}</td></tr><tr><td>}</td></tr></tbody> </table></body></html>');
     });
-    it('test complex table creator',  () => {
-        let array = [];
-        navigate(parseCode('function test (a,b) {let count = 0; while(a>b) { count=count+1; a=a-1; } return count;}', {loc: true}).body, 'function test (a,b) {let count = 0; while(a>b) { count=count+1; a=a-1; } return count;}', array, false);
-        assert.equal((createTable(array)),'<html><body><table border="2"><tbody><tr><td>Line</td><td>Type</td><td>Name</td><td>Condition</td><td>Value</td></tr><tr><td>1</td><td>FunctionDeclaration</td><td>test</td><td></td><td></td></tr><tr><td>1</td><td>VariableDeclaration</td><td>a</td><td></td><td></td></tr><tr><td>1</td><td>VariableDeclaration</td><td>b</td><td></td><td></td></tr><tr><td>1</td><td>VariableDeclaration</td><td>count</td><td></td><td>0</td></tr><tr><td>1</td><td>WhileStatement</td><td></td><td>a > b</td><td></td></tr><tr><td>1</td><td>AssignmentExpression</td><td>count</td><td></td><td>count + 1</td></tr><tr><td>1</td><td>AssignmentExpression</td><td>a</td><td></td><td>a - 1</td></tr><tr><td>1</td><td>ReturnStatement</td><td></td><td></td><td>count</td></tr></tbody> </table></body></html>');
+});
+
+describe('add tests', () => {
+    it('add cases expression', () => {
+        let arrayOfCode = [];
+        navigate(parseCode('function test (x) {if(x>=0) return x; else x=1; if(true) x=1; while(x>0) x=1; while(x>0) return x;}' ).body, 'function test (x) {if(x>=0) return x; else x=1; if(true) x=1; while(x>0) x=1; while(x>0) return x;}' , arrayOfCode , [] , false,[{name: 'x' , value: 1}],[],[]);
+        assert.equal(JSON.stringify(arrayOfCode),'["function test(x) {","if(x >= 0) {","return x;","}","else {","x = 1;","}","if(true) {","x = 1;","}","while(x > 0) {","x = 1;","}","while(x > 0) {","return x;","}","}"]');
+    });
+    it('check function with changing globals', () => {
+        let arrayOfCode = [];
+        navigate(parseCode('let d=0; let e=0; function foo () { if(d==0) return d; }').body[2] , 'let d=0; let e=0; function foo () { if(d==0) return d; }' , arrayOfCode , [] , false,[],[{name: 'd' , value: 0},{name:'e' , value: 0}],[]);
+        assert.equal(JSON.stringify(arrayOfCode),'["function foo() {","if(d == 0) {","return d;","}","}"]');
     });
 });
 
 
-describe('cover cases if test', () => {
-    it('test', () => {
-        let array = [];
-        navigate(parseCode('function test (a) {if(a==0) {return a;} else {return a;} if(a==1) return a; else return a; if(a==0) {a=1;} else {a=3;} if(a==1) a=2; else a=4;}', {loc: true}).body, 'function test (a) {if(a==0) {return a;} else {return a;} if(a==1) return a; else return a; if(a==0) {a=1;} else {a=3;} if(a==1) a=2; else a=4;}', array, false);
-        assert.equal(JSON.stringify(array),'[{"line":1,"type":"FunctionDeclaration","name":"test","condition":"","value":""},{"line":1,"type":"VariableDeclaration","name":"a","condition":"","value":"' +
-            '"},{"line":1,"type":"IfStatement","name":"","condition":"a == 0","value":""},{"line":1,"type":"ReturnStatement","name":"","condition":"","value":"a"},{"line":1,"type":' +
-            '"ReturnStatement","name":"","condition":"","value":"a"},{"line":1,"type":"IfStatement","name":"","condition":"a == 1","value":""},{"line":1,"type":"ReturnStatement","name' +
-            '":"","condition":"","value":"a"},{"line":1,"type":"ReturnStatement","name":"","condition":"","value":"a"},{"line":1,"type":"IfStatement","name":"","condition":"a == 0"' +
-            ',"value":""},{"line":1,"type":"AssignmentExpression","name":"a","condition":"","value":1},{"line":1,"type":"AssignmentExpression","name":"a","condition":"","value":3},{"lin' +
-            'e":1,"type":"IfStatement","name":"","condition":"a == 1","value":""},{"line":1,"type":"AssignmentExpression","name":"a","condition":"","value":2},{"line":1,"type":"Assignm' +
-            'entExpression","name":"a","condition":"","value":4}]');
-    });
-});
-
-describe('cover cases while,for test', () => {
-    it('test', () => {
-        let array = [];
-        navigate(parseCode('function test (a) {while(a==0) {return a;} while(a==1) a=2; while(a==2) return a; while(a==0) {a=1;} for(let i=0;i<a;i=i+1) {return a;} for(let i=0;i<a;i=i+1) return a; for(let i=0;i<a;i=i+1) a=4; for(let i=0;i<a;i=i+1) {a=4;}}', {loc: true}).body, 'function test (a) {while(a==0) {return a;} while(a==1) a=2; while(a==2) return a; while(a==0) {a=1;} for(let i=0;i<a;i=i+1) {return a;} for(let i=0;i<a;i=i+1) return a; for(let i=0;i<a;i=i+1) a=4; for(let i=0;i<a;i=i+1) {a=4;}}', array, false);
-        assert.equal(JSON.stringify(array),'[{"line":1,"type":"FunctionDeclaration","name":"test","condition":"","value":""},{"line":1,"type":"VariableDeclaration","name":"a","condition":"","value":"' +
-            '"},{"line":1,"type":"WhileStatement","name":"","condition":"a == 0","value":""},{"line":1,"type":"ReturnStatement","name":"","condition":"","value":"a"},{"line":1,"type' +
-            '":"WhileStatement","name":"","condition":"a == 1","value":""},{"line":1,"type":"AssignmentExpression","name":"a","condition":"","value":2},{"line":1,"type":"WhileStatement",' +
-            '"name":"","condition":"a == 2","value":""},{"line":1,"type":"ReturnStatement","name":"","condition":"","value":"a"},{"line":1,"type":"WhileStatement","name":"","conditi' +
-            'on":"a == 0","value":""},{"line":1,"type":"AssignmentExpression","name":"a","condition":"","value":1},{"line":1,"type":"ForStatement","name":"","condition":"i < a","value' +
-            '":""},{"line":1,"type":"ReturnStatement","name":"","condition":"","value":"a"},{"line":1,"type":"ForStatement","name":"","condition":"i < a","value":""},{"line":1,"type' +
-            '":"ReturnStatement","name":"","condition":"","value":"a"},{"line":1,"type":"ForStatement","name":"","condition":"i < a","value":""},{"line":1,"type":"AssignmentExpression","name":"a","condition":"","value":4},{"line":1,"type":"ForStatement","name":"","condition":"i < a","value":""},{"line":1,"type":"AssignmentExpression","name":"a","condition":"","value":4}]');
-    });
-    it('more cases' , () => {
-        let array = [];
-        navigate(parseCode('let a=1; if(a>1) a=1; if(a>1) {a=2;} else {if (a==2) {a=1;} else {a=5;}}',{loc:true}).body , 'let a=1; if(a>1) a=1; if(a>1) {a=2;} else {if (a==2) {a=1;} else {a=5;}}' , array , false);
-        assert.equal(JSON.stringify(array),'[{"line":1,"type":"VariableDeclaration","name":"a","condition":"","value":1},{"line":1,"type":"IfStatement","name":"","condition":"a > 1","value":""},{"lin' +
-            'e":1,"type":"AssignmentExpression","name":"a","condition":"","value":1},{"line":1,"type":"IfStatement","name":"","condition":"a > 1","value":""},{"line":1,"type":"Assignme' +
-            'ntExpression","name":"a","condition":"","value":2},{"line":1,"type":"IfStatement","name":"","condition":"a == 2","value":""},{"line":1,"type":"AssignmentExpression","name":"a","condition":"","value":1},{"line":1,"type":"AssignmentExpression","name":"a","condition":"","value":5}]');
-    });
-});
